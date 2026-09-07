@@ -62,7 +62,8 @@ WITH consulta_empleados AS (
         ) AS genero_consolidado,
         
         -- 2. Aseguramos la fecha de contratación más antigua registrada para esa persona
-        MIN(CAST(NULLIF(TRIM(se.fecha_contratacion), '') AS DATE)) OVER(
+        -- fecha_contratacion ya debe ser una DATE válida o NULL después de la transformación
+        MIN(se.fecha_contratacion) OVER(
             PARTITION BY se.nombres, se.apellidos
         ) AS fecha_contratacion_minima,
         
@@ -122,7 +123,7 @@ WITH detectar_cambios AS (
         se.sueldo_nominal::numeric::money AS salary,
         LAG(dp.id) OVER(PARTITION BY se.nombres, se.apellidos ORDER BY CAST(se.fecha AS DATE) ASC) AS puesto_anterior
     FROM public.staging_excel se
-    INNER JOIN public.branch b ON b.name = se.sucursal
+    INNER JOIN public.branch b ON b.id = se.sucursal::INT
     INNER JOIN public.division d ON d.name = se.direccion
     INNER JOIN public.department dpt ON dpt.name = se.departamento AND dpt.branch_id = b.id AND dpt.division_id = d.id
     INNER JOIN public.position p ON p.name = se.posicion
@@ -154,11 +155,12 @@ SELECT
     CASE 
         WHEN LEAD(start_date) OVER(PARTITION BY employee_id ORDER BY start_date ASC) IS NOT NULL 
         -- Ahora la resta aritmética entre DATE e INTERVAL se ejecutará correctamente
-        THEN (LEAD(start_date) OVER(PARTITION BY employee_id ORDER BY start_date ASC) - INTERVAL '1 day')::date
+        THEN (LEAD(start_date) OVER(PARTITION BY employee_id ORDER BY start_date ASC) + INTERVAL '1 day')::date
         ELSE NULL 
     END AS end_date,
     salary
-FROM historial_consolidado
+FROM historial_consolidado 
+WHERE employee_id IS NOT NULL
 ON CONFLICT (employee_id, start_date) DO NOTHING;
 
 -- public.payroll
@@ -190,5 +192,6 @@ INNER JOIN public.payroll pr ON pr.payroll_date = se.fecha
 INNER JOIN public.employee e ON e.name = CONCAT(se.nombres, ' ', se.apellidos)
 INNER JOIN public.employee_position_history h ON h.employee_id = e.id
     AND se.fecha >= h.start_date 
-    AND (h.end_date IS NULL OR se.fecha <= h.end_date)
+    AND (h.end_date IS NULL OR se.fecha <= h.end_date)  
+WHERE pr.id = 2 ORDER BY PAYROLL_ID, EMPLOYEE_ID
 ON CONFLICT (payroll_id, employee_id) DO NOTHING;
