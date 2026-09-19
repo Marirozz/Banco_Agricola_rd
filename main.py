@@ -2,10 +2,13 @@ import glob
 import os
 import re
 import pandas as pd
+from dotenv import load_dotenv
 from src.extract import NominaExtractor
 from src.transform import NominaTransformer
 from src.load import NominaLoader
 from sqlalchemy import Date
+
+load_dotenv()
 
 def obtener_fecha_desde_nombre(nombre_archivo):
     nombre_upper = nombre_archivo.upper()

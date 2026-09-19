@@ -1,10 +1,13 @@
 import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 import pandas as pd
 import numpy as np
 
+load_dotenv()
+
 # Configuración de la conexión
-DATABASE_URL = "postgresql://postgres:1234@localhost:5432/banco_agricola_rd"
+DATABASE_URL = f"postgresql://postgres:{os.getenv('DATABASE_PASSWORD')}@{os.getenv('DATABASE_HOST')}:5432/banco_agricola_rd"
 engine = create_engine(DATABASE_URL)
 
 

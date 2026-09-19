@@ -191,7 +191,7 @@ FROM public.staging_excel se
 INNER JOIN public.payroll pr ON pr.payroll_date = se.fecha
 INNER JOIN public.employee e ON e.name = CONCAT(se.nombres, ' ', se.apellidos)
 INNER JOIN public.employee_position_history h ON h.employee_id = e.id
-    AND se.fecha >= h.start_date 
-    AND (h.end_date IS NULL OR se.fecha <= h.end_date)  
-WHERE pr.id = 2 ORDER BY PAYROLL_ID, EMPLOYEE_ID
+    AND se.fecha >= h.start_date
+    AND (h.end_date IS NULL OR se.fecha <= h.end_date)
+ORDER BY PAYROLL_ID, EMPLOYEE_ID
 ON CONFLICT (payroll_id, employee_id) DO NOTHING;
