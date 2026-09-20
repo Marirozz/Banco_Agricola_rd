@@ -1,3 +1,6 @@
+# Data: payroll (PII) and downloaded financial datasets — never commit real employee data
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
