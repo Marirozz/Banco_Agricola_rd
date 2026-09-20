@@ -3,30 +3,41 @@
 Tracking doc for the improvements we agreed to prioritize. Scope is intentionally
 narrow (5 items) so we don't lose focus — expand only after these are done.
 
-## 1. Idempotent loads
-- [ ] Replace `to_sql(name='staging_excel', if_exists='replace', ...)` in `main.py`
-      with an incremental/upsert strategy (or at minimum a delete-by-`fecha`+reinsert
-      per processed file, not a full-table wipe every run).
-- [ ] Define a natural/dedup key for `staging_excel` rows (e.g. `nombres + apellidos + fecha + sucursal`)
-      so re-running the pipeline on the same month doesn't create duplicate history rows
-      downstream in `employee_position_history` / `payroll_detail`.
-- [ ] Same concern applies to `transform_financial.sql`: it currently `TRUNCATE ... CASCADE`s
-      every fact table on every run — fine for full-refresh today, but document it as a
-      deliberate decision (or move to a partition/date-scoped delete) before it's relied on
-      for incremental runs.
+## 1. Idempotent loads — done (2026-09-19)
+- [x] `to_sql(name='staging_excel', if_exists='replace', ...)` in `main.py`: kept as-is,
+      documented as deliberate in a code comment at the call site. `main.py` globs and
+      re-reads *all* `.xlsx` files under `data/raw/nomina/` every run (no "new files only"
+      filter), so `staging_excel` is a fully-rebuilt-and-immediately-consumed scratch table,
+      not accumulated history — there's nothing to dedup at that layer.
+- [x] Natural/dedup key for downstream history: not needed as a new key — the real fix was
+      making the existing `ON CONFLICT` targets in `orquestacion_modelo.sql` actually work.
+      See `src/sql/schema_fixes.sql`.
+- [x] `transform_financial.sql`'s `TRUNCATE ... CASCADE` on all 4 fact tables: documented as
+      a deliberate full-refresh decision in a comment above the first `TRUNCATE`, with the
+      condition under which to revisit it (data volume grows, or need to retain history
+      across corrected source files).
 
-**Why it matters:** right now re-running `main.py` for a month you've already loaded silently
-duplicates or corrupts relational history (`employee_position_history`, `payroll_detail`).
+**Why it mattered:** re-running `main.py` for an already-loaded month used to silently
+duplicate or corrupt relational history (`employee_position_history`, `payroll_detail`).
 
-**Progress (2026-09-19):** found and fixed a related bug while investigating this — bare
-`ON CONFLICT DO NOTHING` on `type_employee`, `position`, `employee`, and `payroll` was a
-silent no-op because those tables had no `UNIQUE` constraint to trigger a conflict against
-(`division` did). Fixed in `src/sql/schema_fixes.sql`, verified against the live DB (no
-duplicates, constraints in place, script is idempotent). Also removed a stray
-`WHERE pr.id = 2` in `orquestacion_modelo.sql` that was hardcoding the `payroll_detail` load
-to one payroll run. `extract_financial.py`'s 4 staging loads switched `append` → `replace`
-to stop duplicating on re-run. The three checkboxes above (staging_excel dedup key,
-TRUNCATE CASCADE decision) are still open. See `PROGRESS.md` for full detail.
+**How it was fixed (2026-09-19):** the root cause was that `ON CONFLICT DO NOTHING` on
+`type_employee`, `position`, `employee`, and `payroll` was a silent no-op — those tables had
+no `UNIQUE` constraint to trigger a conflict against (`division` did). Fixed in
+`src/sql/schema_fixes.sql`. Also removed a stray `WHERE pr.id = 2` in
+`orquestacion_modelo.sql` that was hardcoding the `payroll_detail` load to one payroll run,
+and switched `extract_financial.py`'s 4 staging loads from `append` to `replace` to stop
+duplicating on re-run.
+
+**Verified end-to-end (2026-09-19):** re-ran `NominaLoader.ejecutar_inserts_relacionales()`
+against the already-loaded `staging_excel` (no new data) and confirmed **zero row-count
+change** across all 9 relational tables (`division`, `type_employee`, `department`,
+`position`, `department_position`, `employee`, `employee_position_history`, `payroll`,
+`payroll_detail`) — the full relational load is idempotent.
+
+**Known limitation, accepted for now:** `ON CONFLICT DO NOTHING` means a *correction* to
+data in an already-loaded month (e.g. a re-uploaded Excel with a fixed salary) won't be
+picked up on re-run — it's silently skipped rather than updated. Revisit with `DO UPDATE`
+if/when that becomes a real workflow. See `PROGRESS.md` for full detail.
 
 ## 2. Config & secrets
 - [x] Move `DATABASE_URL` out of `main.py`, `src/extract_financial.py`, and

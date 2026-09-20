@@ -5,7 +5,49 @@ detail to pick the work back up without re-deriving it. Newest entry on top.
 
 ---
 
-## 2026-09-19 — Roadmap item 2 (done) + item 1 (partial): secrets out of code, real dedup bug fixed
+## 2026-09-19 (b) — Roadmap item 1: closed out
+
+Continuation of the same-day session below. Closed the two remaining item-1 checkboxes.
+
+### What was done
+- Read `src/load.py`, `src/sql/orquestacion_modelo.sql`, and `src/sql/transform_financial.sql`
+  in full to check every `ON CONFLICT` target in the relational orchestration against the
+  live DB's actual constraints (`pg_constraint`). Result: **all 9 tables now have a real
+  `UNIQUE`/PK backing their `ON CONFLICT` clause** — `division`, `department`,
+  `department_position`, `employee_position_history`, and `payroll_detail` already had theirs;
+  `type_employee`, `position`, `employee`, `payroll` got theirs from the morning's
+  `schema_fixes.sql`.
+- Confirmed `main.py` re-globs and re-reads *every* `.xlsx` under `data/raw/nomina/` on each
+  run (no "new files only" filter) — `staging_excel`'s `if_exists='replace'` is therefore a
+  full rebuild-and-immediately-consume scratch table, not accumulated history. Documented
+  this as a deliberate decision directly in `main.py` at the `to_sql` call site (roadmap item
+  1's ask), rather than building an incremental/upsert path that the current design doesn't
+  need.
+- Documented `transform_financial.sql`'s `TRUNCATE ... CASCADE` (on all 4 fact tables) as a
+  deliberate full-refresh decision in a comment above the first `TRUNCATE`, with the
+  condition to revisit it (data volume grows, or a need to retain history across corrected
+  source files).
+
+### Verified end-to-end
+- Captured row counts for all 9 relational tables (`division` 180, `type_employee` 3,
+  `department` 454, `position` 317, `department_position` 1806, `employee` 1422,
+  `employee_position_history` 5091, `payroll` 16, `payroll_detail` 20229).
+- Re-ran `NominaLoader.ejecutar_inserts_relacionales()` against the same, already-loaded
+  `staging_excel` (no new source data) — every table's count was identical afterward (delta
+  +0 across the board). Confirms the full relational load is idempotent on re-run.
+
+### Known limitation, accepted (not fixed)
+`ON CONFLICT DO NOTHING` means a correction to an already-loaded month (e.g. a re-uploaded
+Excel with a fixed salary) is silently skipped, not applied, on re-run. Would need `DO
+UPDATE` targets instead. Not needed today; noted in `ROADMAP.md` in case the workflow changes.
+
+### Roadmap status
+Item 1 is now fully checked off in `ROADMAP.md`. Item 2 was already closed (see entry below).
+Next up per the roadmap: item 3 (CLI split for payroll + financial pipelines).
+
+---
+
+## 2026-09-19 (a) — Roadmap item 2 (done) + item 1 (partial): secrets out of code, real dedup bug fixed
 
 ### Item 2 — Config & secrets
 - `main.py`, `src/extract_financial.py`, `src/transform_financial.py` now build

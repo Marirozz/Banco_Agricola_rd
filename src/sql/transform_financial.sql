@@ -41,6 +41,16 @@ ON CONFLICT (date_key) DO NOTHING;
 
 
 -- =========================================================================
+-- PASOS 2-5: full-refresh deliberado, no un placeholder.
+-- Cada corrida trunca y reconstruye las 4 fact_* completas desde las staging_*
+-- (que a su vez se reemplazan enteras en cada descarga, ver extract_financial.py).
+-- No hay carga incremental por mes: el volumen es pequeno (cientos de filas) y
+-- las staging_* no tienen una columna de "solo lo nuevo" que permitir un delete
+-- scoped de forma segura. Revisar esta decision si el volumen crece o si se
+-- necesita conservar historia entre corridas que datos.gob.do luego corrige.
+-- =========================================================================
+
+-- =========================================================================
 -- PASO 2: Cargar fact_transactions
 -- =========================================================================
 TRUNCATE TABLE public.fact_transactions RESTART IDENTITY CASCADE;

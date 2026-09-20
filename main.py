@@ -119,9 +119,18 @@ def run_pipeline():
         # =====================================================================
         # CAPA BRONZE & RELACIONAL: CARGA A POSTGRESQL
         
+        # if_exists='replace' es deliberado, no un descuido: cada corrida relee TODOS los
+        # .xlsx de data/raw/nomina/ (glob arriba no filtra por "nuevos"), asi que
+        # staging_excel siempre se reconstruye completo antes del paso relacional. No
+        # persiste historia entre corridas, por lo que no hay riesgo de duplicar meses
+        # ya cargados aqui; la idempotencia real la garantizan los UNIQUE constraints +
+        # ON CONFLICT de orquestacion_modelo.sql (ver src/sql/schema_fixes.sql), verificado
+        # 2026-09-19 re-ejecutando el paso relacional sobre el mismo staging_excel (0 filas
+        # nuevas en las 9 tablas). Limitacion conocida: ON CONFLICT DO NOTHING no actualiza
+        # filas existentes, asi que una correccion en un Excel ya cargado no se propaga.
         print("\n[LOAD] Cargando registros unificados a public.staging_excel...")
         df_staging_final.to_sql(
-            name='staging_excel', con=loader.engine, if_exists='replace', 
+            name='staging_excel', con=loader.engine, if_exists='replace',
             index=False, method='multi', dtype={'fecha': Date}
         )
         
